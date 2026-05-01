@@ -3,6 +3,15 @@
   "version": "0.1.0",
   "description": "Terminal Chromium browser manager for Pi coding agent. 30 tools, 7 browsers, cross-platform.",
   "main": "extensions/index.ts",
+  "scripts": {
+    "test": "vitest run",
+    "pack:check": "npm pack --dry-run"
+  },
+  "files": [
+    "extensions",
+    "README.md",
+    "LICENSE"
+  ],
   "keywords": [
     "pi-package",
     "pi-extension",
@@ -26,7 +35,9 @@
     "url": "https://github.com/bigidulka/pi-browser/issues"
   },
   "pi": {
-    "extensions": ["./extensions"],
+    "extensions": [
+      "./extensions"
+    ],
     "image": "https://raw.githubusercontent.com/bigidulka/pi-browser/main/assets/pi-browser-preview.png"
   },
   "dependencies": {
@@ -39,5 +50,12 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "@marcfargas/pi-test-harness": "^0.5.0",
+    "@mariozechner/pi-agent-core": "^0.71.1",
+    "@mariozechner/pi-ai": "^0.71.1",
+    "@mariozechner/pi-coding-agent": "^0.71.1",
+    "vitest": "^4.1.5"
   }
 }
