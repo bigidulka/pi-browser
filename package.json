@@ -1,9 +1,43 @@
 {
   "name": "pi-browser",
   "version": "0.1.0",
-  "private": true,
-  "description": "Terminal Chromium browser manager for Pi with agent control",
+  "description": "Terminal Chromium browser manager for Pi coding agent. 30 tools, 7 browsers, cross-platform.",
+  "main": "extensions/index.ts",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "browser",
+    "chromium",
+    "cdp",
+    "devtools",
+    "automation",
+    "web",
+    "scraping",
+    "testing"
+  ],
+  "author": "bigidulka",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bigidulka/pi-browser.git"
+  },
+  "homepage": "https://github.com/bigidulka/pi-browser#readme",
+  "bugs": {
+    "url": "https://github.com/bigidulka/pi-browser/issues"
+  },
+  "pi": {
+    "extensions": ["./extensions"],
+    "image": "https://raw.githubusercontent.com/bigidulka/pi-browser/main/assets/pi-browser-preview.png"
+  },
   "dependencies": {
     "chromex-mcp": "latest"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-ai": "*",
+    "@mariozechner/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }
