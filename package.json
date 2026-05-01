@@ -1,0 +1,9 @@
+{
+  "name": "pi-browser",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Terminal Chromium browser manager for Pi with agent control",
+  "dependencies": {
+    "chromex-mcp": "latest"
+  }
+}
