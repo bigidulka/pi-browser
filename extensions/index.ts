@@ -11,7 +11,7 @@ import { Type } from "typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { resolve, join } from "node:path";
 import { homedir, tmpdir, platform } from "node:os";
-import { existsSync, mkdirSync, readdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
 
 // ─── Platform Detection ──────────────────────────────────────────────────────
@@ -222,31 +222,31 @@ interface ExecResult {
   killed: boolean;
 }
 
-function resolvePortFile(): string | null {
-  const activePortFile = portFilePath(browserState.activeProfile);
-  if (existsSync(activePortFile)) return activePortFile;
+function resolvePortFileCandidates(): Array<{ profile: string; path: string; mtimeMs: number }> {
+  const candidates: Array<{ profile: string; path: string; mtimeMs: number }> = [];
 
-  if (!existsSync(PROFILES_DIR)) return null;
+  const activePortFile = portFilePath(browserState.activeProfile);
+  if (existsSync(activePortFile)) {
+    candidates.push({ profile: browserState.activeProfile, path: activePortFile, mtimeMs: statSync(activePortFile).mtimeMs });
+  }
+
+  if (!existsSync(PROFILES_DIR)) return candidates;
   const profileDirs = readdirSync(PROFILES_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => entry.name);
 
   for (const profile of profileDirs) {
+    if (profile === browserState.activeProfile) continue;
     const candidate = portFilePath(profile);
     if (existsSync(candidate)) {
-      browserState.activeProfile = profile;
-      return candidate;
+      candidates.push({ profile, path: candidate, mtimeMs: statSync(candidate).mtimeMs });
     }
   }
 
-  return null;
+  return candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
 }
 
-function runChromex(args: string[], timeout = DEFAULT_TIMEOUT): Promise<ExecResult> {
-  const env = { ...process.env };
-  const portFile = resolvePortFile();
-  if (portFile) env.CDP_PORT_FILE = portFile;
-
+function runChromexOnce(args: string[], timeout: number, env: NodeJS.ProcessEnv): Promise<ExecResult> {
   return new Promise((resolve) => {
     const cmd = IS_WIN ? CHROMEX_BIN : CHROMEX_BIN;
     const proc = spawn(cmd, args, {
@@ -269,6 +269,32 @@ function runChromex(args: string[], timeout = DEFAULT_TIMEOUT): Promise<ExecResu
       resolve({ stdout, stderr, code: -1, killed: true });
     });
   });
+}
+
+function runChromex(args: string[], timeout = DEFAULT_TIMEOUT): Promise<ExecResult> {
+  const baseEnv = { ...process.env };
+  const candidates = resolvePortFileCandidates();
+  const shouldProbe = args[0] === "list";
+
+  if (!shouldProbe) {
+    const primary = candidates[0];
+    const env = primary ? { ...baseEnv, CDP_PORT_FILE: primary.path } : baseEnv;
+    if (primary) browserState.activeProfile = primary.profile;
+    return runChromexOnce(args, timeout, env);
+  }
+
+  if (candidates.length === 0) {
+    return runChromexOnce(args, timeout, baseEnv);
+  }
+
+  return candidates.reduce<Promise<ExecResult>>(async (prev, candidate, idx) => {
+    const res = idx === 0 ? await prev : prev;
+    if (idx > 0 && res.code === 0) return res;
+    const env = { ...baseEnv, CDP_PORT_FILE: candidate.path };
+    const attempt = await runChromexOnce(args, timeout, env);
+    if (attempt.code === 0) browserState.activeProfile = candidate.profile;
+    return attempt;
+  }, Promise.resolve({ stdout: "", stderr: "", code: 1, killed: false }));
 }
 
 function targetArg(target: string | undefined): string {
