@@ -23,6 +23,7 @@ const IS_MAC = platform() === "darwin";
 
 const CHROMEX_BIN = resolve(
   __dirname,
+  "..",
   "node_modules",
   ".bin",
   IS_WIN ? "chromex.cmd" : "chromex"
