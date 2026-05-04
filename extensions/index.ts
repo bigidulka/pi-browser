@@ -11,7 +11,7 @@ import { Type } from "typebox";
 import { StringEnum } from "@mariozechner/pi-ai";
 import { resolve, join } from "node:path";
 import { homedir, tmpdir, platform } from "node:os";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { spawn, execSync } from "node:child_process";
 
 // ─── Platform Detection ──────────────────────────────────────────────────────
@@ -222,10 +222,30 @@ interface ExecResult {
   killed: boolean;
 }
 
+function resolvePortFile(): string | null {
+  const activePortFile = portFilePath(browserState.activeProfile);
+  if (existsSync(activePortFile)) return activePortFile;
+
+  if (!existsSync(PROFILES_DIR)) return null;
+  const profileDirs = readdirSync(PROFILES_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name);
+
+  for (const profile of profileDirs) {
+    const candidate = portFilePath(profile);
+    if (existsSync(candidate)) {
+      browserState.activeProfile = profile;
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
 function runChromex(args: string[], timeout = DEFAULT_TIMEOUT): Promise<ExecResult> {
   const env = { ...process.env };
-  const portFile = portFilePath(browserState.activeProfile);
-  if (existsSync(portFile)) env.CDP_PORT_FILE = portFile;
+  const portFile = resolvePortFile();
+  if (portFile) env.CDP_PORT_FILE = portFile;
 
   return new Promise((resolve) => {
     const cmd = IS_WIN ? CHROMEX_BIN : CHROMEX_BIN;
