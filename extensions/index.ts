@@ -377,14 +377,14 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "browser_launch",
     label: "Launch Browser",
-    description: `Launch a Chromium-based browser. Supported: ${BROWSER_NAMES.join(", ")}. Creates profile if needed.`,
-    promptSnippet: "Launch browser to start browsing",
-    promptGuidelines: ["Use browser_launch when no browser is running or you need a fresh browser instance."],
+    description: "Launch a Chromium browser with a GUI by default. Use headless only when explicitly requested.",
+    promptSnippet: "Launch a browser window",
+    promptGuidelines: ["Prefer browser_init if a browser is already open.", "Headless is opt-in; default is GUI."],
     parameters: Type.Object({
       url: Type.Optional(Type.String({ description: "URL to open on launch" })),
       profile: Type.Optional(Type.String({ description: "Profile name (default: 'default')" })),
       browser: Type.Optional(StringEnum(BROWSER_NAMES, { description: "Browser binary (default: auto-detect first available)" })),
-      headless: Type.Optional(Type.Boolean({ description: "Run headless (no GUI)" })),
+      headless: Type.Optional(Type.Boolean({ description: "Run headless (no GUI). Default false." })),
     }),
     async execute(_id, params, signal, _onUpdate, ctx) {
       if (signal?.aborted) throw new Error("Cancelled");
@@ -431,7 +431,7 @@ export default function (pi: ExtensionAPI) {
         "--no-default-browser-check",
         `--user-data-dir=${profileDir}`,
       ];
-      if (params.headless) spawnArgs.push("--headless=new");
+      if (params.headless === true) spawnArgs.push("--headless=new");
       if (params.url) spawnArgs.push(params.url);
 
       try {
@@ -514,9 +514,9 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "browser_init",
     label: "Attach to Browser",
-    description: "Attach to an already running browser using an existing DevTools port.",
-    promptSnippet: "Attach to already running browser",
-    promptGuidelines: ["Use browser_init to connect without launching a new browser."],
+    description: "Connect to an already running browser (no new window).",
+    promptSnippet: "Attach to an existing browser",
+    promptGuidelines: ["Use before browser_launch to avoid extra windows."],
     parameters: Type.Object({
       profile: Type.Optional(Type.String({ description: "Profile name (optional). If set, only this profile is used." })),
     }),
@@ -535,7 +535,7 @@ export default function (pi: ExtensionAPI) {
 
       const res = await runChromex(["list"], 5000);
       if (res.code !== 0 || !res.stdout.trim()) {
-        return { content: [{ type: "text", text: "No browser connected. Start a browser with remote debugging or use browser_launch." }], isError: true };
+        return { content: [{ type: "text", text: "No browser detected. Use browser_launch to open one." }], isError: true };
       }
 
       const tabs = parseList(res.stdout);
@@ -558,8 +558,7 @@ export default function (pi: ExtensionAPI) {
 
   // Helper: register a simple chromex-wrapper tool (reduces boilerplate)
   function registerSimpleTool(def: {
-    name: string; label: string; description: string; snippet?: string;
-    guidelines?: string[];
+    name: string; label: string; description: string;
     params: Record<string, any>;
     buildArgs: (params: any, target: string) => string[];
     timeout?: number;
@@ -568,8 +567,6 @@ export default function (pi: ExtensionAPI) {
       name: def.name,
       label: def.label,
       description: def.description,
-      ...(def.snippet ? { promptSnippet: def.snippet } : {}),
-      ...(def.guidelines ? { promptGuidelines: def.guidelines } : {}),
       parameters: Type.Object(def.params),
       async execute(_id, params) {
         const target = targetArg(params.target);
@@ -585,13 +582,13 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: "browser_list",
     label: "List Tabs",
-    description: "List all open browser tabs with target IDs, titles, and URLs.",
-    promptSnippet: "List open browser tabs",
-    promptGuidelines: ["Use browser_list to discover tab target IDs before interacting with pages."],
+    description: "List open tabs and set the first one as active if none is selected.",
+    promptSnippet: "List browser tabs",
+    promptGuidelines: ["Call browser_init or browser_launch before listing."],
     parameters: Type.Object({}),
     async execute() {
       const res = await runChromex(["list"]);
-      if (res.code !== 0) return { content: [{ type: "text", text: "No browser connected. Run browser_launch first." }], isError: true };
+      if (res.code !== 0) return { content: [{ type: "text", text: "No browser connected. Run browser_init or browser_launch first." }], isError: true };
       const tabs = parseList(res.stdout);
       if (!browserState.activeTarget && tabs.length > 0) {
         browserState.activeTarget = tabs[0].targetId;
@@ -604,7 +601,7 @@ export default function (pi: ExtensionAPI) {
   // --- browser_open ---
   registerSimpleTool({
     name: "browser_open", label: "Open Tab",
-    description: "Open a new tab with a URL.", snippet: "Open new tab",
+    description: "Open a new tab in the current browser.",
     params: { url: Type.String({ description: "URL to open" }) },
     buildArgs: (p) => ["open", p.url],
   });
@@ -612,9 +609,9 @@ export default function (pi: ExtensionAPI) {
   // --- browser_navigate ---
   pi.registerTool({
     name: "browser_navigate", label: "Navigate",
-    description: "Navigate tab to URL, or back/forward/reload.",
+    description: "Navigate a tab to a URL or perform back/forward/reload.",
     promptSnippet: "Navigate to URL",
-    promptGuidelines: ["Use browser_navigate to go to a URL."],
+    promptGuidelines: ["Use browser_navigate to change the current page."],
     parameters: Type.Object({
       url: Type.String({ description: "URL or: back, forward, reload, reload-hard" }),
       target: Type.Optional(Type.String({ description: "Tab target ID" })),
