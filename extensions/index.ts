@@ -287,14 +287,19 @@ function runChromex(args: string[], timeout = DEFAULT_TIMEOUT): Promise<ExecResu
     return runChromexOnce(args, timeout, baseEnv);
   }
 
-  return candidates.reduce<Promise<ExecResult>>(async (prev, candidate, idx) => {
-    const res = idx === 0 ? await prev : prev;
-    if (idx > 0 && res.code === 0) return res;
-    const env = { ...baseEnv, CDP_PORT_FILE: candidate.path };
-    const attempt = await runChromexOnce(args, timeout, env);
-    if (attempt.code === 0) browserState.activeProfile = candidate.profile;
-    return attempt;
-  }, Promise.resolve({ stdout: "", stderr: "", code: 1, killed: false }));
+  return (async () => {
+    let lastResult: ExecResult = { stdout: "", stderr: "", code: 1, killed: false };
+    for (const candidate of candidates) {
+      const env = { ...baseEnv, CDP_PORT_FILE: candidate.path };
+      const attempt = await runChromexOnce(args, timeout, env);
+      lastResult = attempt;
+      if (attempt.code === 0) {
+        browserState.activeProfile = candidate.profile;
+        return attempt;
+      }
+    }
+    return lastResult;
+  })();
 }
 
 function targetArg(target: string | undefined): string {
