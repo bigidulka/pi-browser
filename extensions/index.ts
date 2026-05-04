@@ -504,6 +504,52 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
+  // --- browser_init ---
+  pi.registerTool({
+    name: "browser_init",
+    label: "Attach to Browser",
+    description: "Attach to an already running browser using an existing DevTools port.",
+    promptSnippet: "Attach to already running browser",
+    promptGuidelines: ["Use browser_init to connect without launching a new browser."],
+    parameters: Type.Object({
+      profile: Type.Optional(Type.String({ description: "Profile name (optional). If set, only this profile is used." })),
+    }),
+    async execute(_id, params) {
+      if (params.profile) {
+        const profileName = sanitizeProfile(params.profile);
+        browserState.activeProfile = profileName;
+        const portFile = portFilePath(profileName);
+        if (!existsSync(portFile)) {
+          return {
+            content: [{ type: "text", text: `No DevToolsActivePort for profile '${profileName}'. Launch browser with that profile first.` }],
+            isError: true,
+          };
+        }
+      }
+
+      const res = await runChromex(["list"], 5000);
+      if (res.code !== 0 || !res.stdout.trim()) {
+        return { content: [{ type: "text", text: "No browser connected. Start a browser with remote debugging or use browser_launch." }], isError: true };
+      }
+
+      const tabs = parseList(res.stdout);
+      if (tabs.length > 0) {
+        browserState.activeTarget = tabs[0].targetId;
+        browserState.connected = true;
+        return {
+          content: [{ type: "text", text: `Browser connected (profile: ${browserState.activeProfile}).\n\n${truncate(res.stdout.trim())}` }],
+          details: { tabs, activeTarget: browserState.activeTarget, profile: browserState.activeProfile },
+        };
+      }
+
+      browserState.connected = true;
+      return {
+        content: [{ type: "text", text: `Browser connected (profile: ${browserState.activeProfile}), but no tabs found.` }],
+        details: { tabs, activeTarget: browserState.activeTarget, profile: browserState.activeProfile },
+      };
+    },
+  });
+
   // Helper: register a simple chromex-wrapper tool (reduces boilerplate)
   function registerSimpleTool(def: {
     name: string; label: string; description: string; snippet?: string;
